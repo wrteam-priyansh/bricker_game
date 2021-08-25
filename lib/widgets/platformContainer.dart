@@ -1,3 +1,4 @@
+import 'package:brick_wall/homeScreen.dart';
 import 'package:flutter/material.dart';
 
 class PlatformContainer extends StatelessWidget {
@@ -8,7 +9,7 @@ class PlatformContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: width,
-      height: 10,
+      height: platformHeight,
       decoration: BoxDecoration(color: Colors.deepPurple, borderRadius: BorderRadius.circular(10.0)),
     );
   }
