@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:brick_wall/models/brick.dart';
 import 'package:brick_wall/widgets/ballContaienr.dart';
 import 'package:brick_wall/widgets/platformContainer.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class HomeScreen extends StatefulWidget {
   HomeScreen({Key? key}) : super(key: key);
@@ -15,40 +15,67 @@ class HomeScreen extends StatefulWidget {
 
 const double ballWidth = 20.0;
 const double ballHeight = 20.0;
-const double platformHeight = 10.0;
-const double defaultTopBrickPadding = 10;
-const double brickWidthPercentage = 0.175;
-const double brickHeightPercentage = 0.03;
+const double platformHeight = 30.0;
+
+//space between bricks and statusbar
+const double defaultTopBricksPadding = 80;
+const double inBetweenTopBrickPadding = 10;
+
+const double brickWidthPercentage = 0.175; //with respects to screen width
+const double brickHeightPercentage = 0.03; //with respects to screen height
 const double inbetweenBrickSpace = 10.0;
+
+//how many pixels ball will move in x and y direction
+const double ballMovePixels = 3.0;
+
+//
 const int totalBrickRow = 3;
-const int bricksInRow = 5;
-const double bricksHorizontalPadding = 70;
+//bricks in row
+const int bricksInRow = 4;
+const double platfomrWidthPercentage = 0.3;
+
+const double gestureAreaHeightPercentage =
+    0.3; //with resppects to screen height
 
 enum BallDirection { DOWN, UP, LEFT, RIGHT }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool isReadyToPlay = false;
+
+  //to track x and y point of ball
   late double ballX = 0.5;
   late double ballY = 0.5;
+
   BallDirection ballVerticalDirection = BallDirection.UP;
 
   BallDirection ballHorizontalDirection = BallDirection.LEFT;
 
   late double platFormWidth;
-  late double platFormX;
 
-  late double platFormY;
-
+  //game loop
   late Timer? timer;
   late Size screenSize;
-  late double ballMoveYPixels = 3.0;
+
+  late bool gameOver = false;
+  late bool gameCompleted = false;
 
   late List<Brick> bricks = [];
+
+  late int score = 0;
+
+  late AnimationController _platformSlideAnimationController =
+      AnimationController(vsync: this, value: 0.5);
+
+  late Animation<double> _platformSlideAnimation =
+      Tween<double>(begin: 0.0, end: (1.0 - platfomrWidthPercentage))
+          .animate(_platformSlideAnimationController);
+
+  late bool gameStarted = false;
 
   @override
   void initState() {
     super.initState();
-    Future.delayed(Duration.zero, () {
+    Future.delayed(Duration(seconds: 1), () {
       initGame();
       addBricks();
       isReadyToPlay = true;
@@ -58,33 +85,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void initGame() {
     screenSize = MediaQuery.of(context).size;
+    //initial position of ball
     ballX = screenSize.width * (0.5) - ballWidth * (0.5);
     ballY = screenSize.height * (0.5) - ballHeight * (0.5);
-    platFormWidth = screenSize.width * (0.15);
-    platFormY = screenSize.height * (0.025); //from bottom
-    platFormX = screenSize.width * (0.5) - platFormWidth * (0.5);
+    //calculating platform width
+    platFormWidth = screenSize.width * platfomrWidthPercentage;
   }
 
+  //to calculate the brick x position
   double _calculateBrickX(int currentBrickIndex) {
-    double brickX = bricksHorizontalPadding;
+    //it calculates the brick left padding
+    double brickX = (MediaQuery.of(context).size.width -
+            ((MediaQuery.of(context).size.width *
+                    brickWidthPercentage *
+                    bricksInRow) +
+                inbetweenBrickSpace * (bricksInRow - 1))) *
+        0.5;
 
     for (var i = currentBrickIndex; i > 0; i--) {
-      brickX = screenSize.width * brickWidthPercentage + brickX + inbetweenBrickSpace;
+      brickX = screenSize.width * brickWidthPercentage +
+          brickX +
+          inbetweenBrickSpace;
     }
 
     return brickX;
   }
 
   double _calculateBrickY(int currentRowIndex) {
-    double brickY = defaultTopBrickPadding;
+    //top padding of bricks
+    double brickY = defaultTopBricksPadding;
 
     for (var i = currentRowIndex; i > 0; i--) {
-      brickY = screenSize.height * brickHeightPercentage + brickY + defaultTopBrickPadding;
+      brickY = screenSize.height * brickHeightPercentage +
+          brickY +
+          //if brick row in not first then add inBetweenTopPadding
+          (currentRowIndex == 0 ? 0 : inBetweenTopBrickPadding);
     }
 
     return brickY;
   }
 
+  //bircks will be add in row wise
+  //fitst row of bricks build and so on
   void addBricks() {
     for (var i = 0; i < totalBrickRow; i++) {
       for (var j = 0; j < bricksInRow; j++) {
@@ -102,49 +144,87 @@ class _HomeScreenState extends State<HomeScreen> {
   void startTimer(Size screenSize) {
     timer = Timer.periodic(Duration(milliseconds: 10), (timer) {
       breakBricks();
+
       changeBallDirection(screenSize);
       moveBall();
+      if (allBricksBroken()) {
+        gameCompleted = true;
+        setState(() {});
+        timer.cancel();
+        gameCompletedDialog();
+      }
     });
   }
 
+  //to move the ball
   void moveBall() {
     setState(() {
       if (ballVerticalDirection == BallDirection.DOWN) {
-        ballY += ballMoveYPixels;
+        ballY += ballMovePixels;
       } else if (ballVerticalDirection == BallDirection.UP) {
-        ballY -= ballMoveYPixels;
+        ballY -= ballMovePixels;
       }
 
       if (ballHorizontalDirection == BallDirection.RIGHT) {
-        ballX += ballMoveYPixels;
+        ballX += ballMovePixels;
       } else if (ballHorizontalDirection == BallDirection.LEFT) {
-        ballX -= ballMoveYPixels;
+        ballX -= ballMovePixels;
       }
     });
   }
 
+  bool isBallTouchesToPlatform() {
+    //need to calculate the left padding so we will get the x position of platform
+    final lower = screenSize.width * _platformSlideAnimation.value;
+
+    //will add the platformWidth
+    final higher = lower + platFormWidth;
+    //if ballX is in between this range then it touches the platform
+    return (ballX >= lower && ballX <= higher);
+  }
+
+  //
   void changeBallDirection(Size screenSize) {
+    //it will be bottom limit for ball to go
+    final platformY = screenSize.height * gestureAreaHeightPercentage;
     setState(() {
       //maximum ball can go to the down side
-      if (ballY > (screenSize.height - platFormY - platformHeight - ballHeight)) {
+      if (ballY >= (screenSize.height - platformY - ballHeight)) {
         //need to check if ball is touching the platform or not
-        if (ballX >= platFormX && ballX <= platFormX + platFormWidth) {
+        if (isBallTouchesToPlatform()) {
           ballVerticalDirection = BallDirection.UP;
         } else {
           //user failed to bounce the ball back
           timer?.cancel();
+          gameOver = true;
         }
-      } else if (ballY < defaultTopBrickPadding) {
+      } else if (ballY < defaultTopBricksPadding) {
         ballVerticalDirection = BallDirection.DOWN;
       }
 
       //change ballX direction
       if (ballX < 0) {
         ballHorizontalDirection = BallDirection.RIGHT;
-      } else if (ballX > screenSize.width) {
+      } else if (ballX > screenSize.width - (ballWidth)) {
         ballHorizontalDirection = BallDirection.LEFT;
       }
     });
+
+    if (gameOver) {
+      gameOverDialog();
+    }
+  }
+
+  bool allBricksBroken() {
+    bool allBricksBroken = true;
+    for (var i = 0; i < bricks.length - 1; i++) {
+      //checking any brick is unbroken or not
+      if (!bricks[i].broken) {
+        allBricksBroken = false;
+        break;
+      }
+    }
+    return allBricksBroken;
   }
 
   void breakBricks() {
@@ -152,17 +232,19 @@ class _HomeScreenState extends State<HomeScreen> {
       Brick brick = bricks[i];
       if (!brick.broken) {
         //check for ballY has in the range of brickY
-        if (ballY >= brick.brickY && ballY <= brick.brickY + brick.brickHeight) {
+        if (ballY >= brick.brickY &&
+            ballY <= brick.brickY + brick.brickHeight) {
           //check for ballX has in range of brickY
           if (ballX >= brick.bricX && ballX <= brick.bricX + brick.brickWidth) {
             bricks[i] = brick.breakBrick();
+            score++;
 
             ballVerticalDirection = BallDirection.DOWN;
             setState(() {});
             break;
           }
         }
-      }
+      } else {}
     }
   }
 
@@ -175,58 +257,144 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Container(
               width: brick.brickWidth,
               height: brick.brickHeight,
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(5.0), color: Colors.deepPurple),
+              decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(5.0),
+                  color: Colors.white),
+            ));
+  }
+
+  void restartGame() async {
+    initGame();
+    bricks.clear();
+    score = 0;
+    gameCompleted = false;
+    gameOver = false;
+    addBricks();
+    ballVerticalDirection = BallDirection.UP;
+    setState(() {});
+    await Future.delayed(Duration(milliseconds: 500));
+    startTimer(screenSize);
+  }
+
+  void gameOverDialog() {
+    showDialog(
+        barrierDismissible: false,
+        context: context,
+        builder: (context) => WillPopScope(
+              onWillPop: () => Future.value(false),
+              child: AlertDialog(
+                title: Text("Game over"),
+                content: Text("Score is : $score"),
+                actions: [
+                  CupertinoButton(
+                      child: Text("Restart"),
+                      onPressed: () {
+                        restartGame();
+                        Navigator.of(context).pop();
+                      }),
+                  CupertinoButton(
+                      child: Text("Exit"),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).pop();
+                      }),
+                ],
+              ),
+            ));
+  }
+
+  void gameCompletedDialog() {
+    showDialog(
+        barrierDismissible: false,
+        context: context,
+        builder: (context) => WillPopScope(
+              onWillPop: () => Future.value(false),
+              child: AlertDialog(
+                title: Text("You won"),
+                content: Text("Score is : $score"),
+                actions: [
+                  CupertinoButton(
+                      child: Text("Restart"),
+                      onPressed: () {
+                        restartGame();
+                        Navigator.of(context).pop();
+                      }),
+                  CupertinoButton(
+                      child: Text("Exit"),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).pop();
+                      }),
+                ],
+              ),
             ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: gameStarted
+          ? SizedBox()
+          : FloatingActionButton(
+              backgroundColor: Colors.white,
+              child: Icon(
+                Icons.play_arrow,
+                color: Colors.black,
+                size: 40.0,
+              ),
+              onPressed: () {
+                startTimer(screenSize);
+                setState(() {
+                  gameStarted = true;
+                });
+              }),
+      backgroundColor: Colors.black,
       body: isReadyToPlay
-          ? RawKeyboardListener(
-              focusNode: FocusNode(),
-              onKey: (key) {
-                if (key.isKeyPressed(LogicalKeyboardKey.arrowLeft)) {
-                  if (platFormX > 0.0) {
-                    platFormX = platFormX - 25;
-                    setState(() {});
-                  }
-                } else if (key.isKeyPressed(LogicalKeyboardKey.arrowRight)) {
-                  if (platFormX < (screenSize.width - platFormWidth)) {
-                    platFormX = platFormX + 25;
-                    setState(() {});
-                  }
-                }
-              },
-              autofocus: true,
-              child: GestureDetector(
-                onTap: () {
-                  //print(defaultTopBrickPadding + bricks.first.brickHeight);
-                  startTimer(screenSize);
-                },
-                child: Stack(
-                  children: [
-                    Container(
-                      width: MediaQuery.of(context).size.width,
-                      height: MediaQuery.of(context).size.height,
-                      decoration: BoxDecoration(color: Colors.deepPurple[100]),
-                    ),
-                    ...bricks.map((brick) => _buildBrick(brick)).toList(),
-                    Positioned(
-                      left: ballX,
-                      top: ballY,
-                      child: BallContainer(),
-                    ),
-                    Positioned(
-                      bottom: platFormY,
-                      left: platFormX,
+          ? Stack(
+              children: [
+                ...bricks.map((brick) => _buildBrick(brick)).toList(),
+                Positioned(
+                  left: ballX,
+                  top: ballY,
+                  child: BallContainer(),
+                ),
+                AnimatedBuilder(
+                  builder: (context, child) {
+                    return Positioned(
                       child: PlatformContainer(
                         width: platFormWidth,
                       ),
-                    ),
-                  ],
+                      bottom: screenSize.height * gestureAreaHeightPercentage -
+                          platformHeight,
+                      left: screenSize.width * (_platformSlideAnimation.value),
+                    );
+                  },
+                  animation: _platformSlideAnimationController,
                 ),
-              ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: GestureDetector(
+                    onHorizontalDragUpdate: (dragUpdateDetails) {
+                      if (gameOver || gameCompleted) {
+                        return;
+                      }
+                      final dragged = dragUpdateDetails.primaryDelta! /
+                          MediaQuery.of(context).size.width;
+
+                      _platformSlideAnimationController.value =
+                          _platformSlideAnimationController.value +
+                              dragged * (1.275);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: Colors.transparent)),
+                      width: MediaQuery.of(context).size.width,
+                      height: MediaQuery.of(context).size.height *
+                          gestureAreaHeightPercentage,
+                    ),
+                  ),
+                ),
+              ],
             )
           : Container(),
     );

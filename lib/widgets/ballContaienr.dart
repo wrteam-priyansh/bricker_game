@@ -9,7 +9,7 @@ class BallContainer extends StatelessWidget {
     return Container(
       height: ballHeight,
       width: ballWidth,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.deepPurple),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white),
     );
   }
 }

@@ -10,7 +10,8 @@ class PlatformContainer extends StatelessWidget {
     return Container(
       width: width,
       height: platformHeight,
-      decoration: BoxDecoration(color: Colors.deepPurple, borderRadius: BorderRadius.circular(10.0)),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(10.0)),
     );
   }
 }
